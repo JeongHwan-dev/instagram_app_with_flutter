@@ -3,6 +3,9 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter/cupertino.dart';
+import 'package:provider/provider.dart';
 
 import './style.dart' as style;
 
@@ -10,11 +13,22 @@ const dataUrl = 'https://codingapple1.github.io/app/data.json';
 const moreDataUrl = 'https://codingapple1.github.io/app/more1.json';
 
 void main() {
-  runApp(MaterialApp(
-    theme: style.theme,
-    initialRoute: '/',
-    home: MyApp(),
-  ));
+  runApp(
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider(
+          create: (context) => Store1(),
+        ),
+        ChangeNotifierProvider(
+          create: (context) => Store2(),
+        ),
+      ],
+      child: MaterialApp(
+        theme: style.theme,
+        home: MyApp(),
+      ),
+    ),
+  );
 }
 
 class MyApp extends StatefulWidget {
@@ -34,6 +48,7 @@ class _MyAppState extends State<MyApp> {
   void initState() {
     super.initState();
     getData();
+    saveData();
   }
 
   getData() async {
@@ -76,6 +91,16 @@ class _MyAppState extends State<MyApp> {
     setState(() {
       userContent = content;
     });
+  }
+
+  saveData() async {
+    var storage = await SharedPreferences.getInstance();
+
+    storage.setString('name', 'john');
+
+    var result = storage.get('name');
+
+    print(result);
   }
 
   @override
@@ -184,7 +209,25 @@ class _HomeState extends State<Home> {
                     ? Image.network(widget.feedList[index]['image'])
                     : Image.file(widget.feedList[index]['image']),
                 Text('좋아요 ${widget.feedList[index]['likes']}'),
-                Text(widget.feedList[index]['user']),
+                GestureDetector(
+                  child: Text(widget.feedList[index]['user']),
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      PageRouteBuilder(
+                        pageBuilder: (c, a1, a2) => Profile(),
+                        transitionsBuilder: (c, a1, a2, child) =>
+                            SlideTransition(
+                          position: Tween(
+                            begin: Offset(0, -1.0),
+                            end: Offset(0.0, 0.0),
+                          ).animate(a1),
+                          child: child,
+                        ),
+                      ),
+                    );
+                  },
+                ),
                 Text(widget.feedList[index]['date']),
                 Text(widget.feedList[index]['content'])
               ],
@@ -196,7 +239,6 @@ class _HomeState extends State<Home> {
           child: CircularProgressIndicator(),
         ),
       );
-      // return CircularProgressIndicator();
     }
   }
 }
@@ -242,6 +284,113 @@ class Upload extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class Store1 extends ChangeNotifier {
+  var name = 'Jeong Park';
+  var followerCount = 0;
+  var isFollowed = false;
+  var profileImage = [];
+
+  getData() async {
+    var response = await http
+        .get(Uri.parse('https://codingapple1.github.io/app/profile.json'));
+    var profileData = jsonDecode(response.body);
+
+    profileImage = profileData;
+
+    print(profileData);
+    notifyListeners();
+  }
+
+  changeName() {
+    name = 'john son';
+    notifyListeners();
+  }
+
+  followToggle() {
+    isFollowed ? unfollowUser() : followUser();
+    notifyListeners();
+  }
+
+  followUser() {
+    followerCount += 1;
+    isFollowed = true;
+  }
+
+  unfollowUser() {
+    followerCount -= 1;
+    isFollowed = false;
+  }
+}
+
+class Store2 extends ChangeNotifier {
+  var name = 'john kim';
+}
+
+class Profile extends StatelessWidget {
+  const Profile({Key? key}) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(context.watch<Store1>().name),
+      ),
+      body: CustomScrollView(
+        slivers: [
+          SliverToBoxAdapter(
+            child: ProfileHeader(),
+          ),
+          SliverGrid(
+              delegate: SliverChildBuilderDelegate(
+                (context, index) => Container(
+                    decoration: BoxDecoration(
+                      border: Border.all(
+                        width: 0.5,
+                        color: Colors.white,
+                      ),
+                    ),
+                    child: Image.network(
+                        context.watch<Store1>().profileImage[index])),
+                childCount: context.watch<Store1>().profileImage.length,
+              ),
+              gridDelegate:
+                  SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 3))
+        ],
+      ),
+    );
+  }
+}
+
+class ProfileHeader extends StatelessWidget {
+  const ProfileHeader({Key? key}) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        CircleAvatar(
+          radius: 30,
+          backgroundColor: Colors.grey,
+        ),
+        Text('팔로워 ${context.watch<Store1>().followerCount}명'),
+        ElevatedButton(
+          onPressed: () {
+            context.read<Store1>().followToggle();
+          },
+          child: Text('팔로우'),
+        ),
+        ElevatedButton(
+          onPressed: () {
+            context.read<Store1>().getData();
+          },
+          child: Text('사진 가져오기'),
+        ),
+      ],
+      mainAxisAlignment: MainAxisAlignment.spaceAround,
     );
   }
 }
